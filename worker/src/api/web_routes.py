@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from src import __version__
 from src.db.connection import get_connection
+from src.core.db import _get_conn
 
 logger = logging.getLogger(__name__)
 
@@ -315,3 +316,120 @@ def worker_state() -> dict:
     }
 
 
+
+
+# ---------------------------------------------------------------------------
+# Missing routes — needed to prevent "not available through HTTP" errors
+# ---------------------------------------------------------------------------
+
+@router.get("/pipeline/artifact-paths")
+def pipeline_artifact_paths(project_id: str) -> dict:
+    """Return artifact paths for a project (source video, output, etc.)."""
+    from src.core.db import get_project_by_id
+    project = get_project_by_id(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+    video_path = project.get("source_video_path", "")
+    project_dir = project.get("project_dir", "")
+    return {
+        "projectDir": project_dir,
+        "audio": "",
+        "transcript": "",
+        "translation": "",
+        "subtitleSrt": "",
+        "subtitleAss": "",
+        "renderedVideo": "",
+    }
+
+
+@router.post("/pipeline/submit")
+def pipeline_submit(body: dict) -> dict:
+    """Stub: pipeline submit — orchestrator not yet implemented in web mode."""
+    return {"error": "Pipeline submit not yet available in web mode", "status": 501}
+
+
+@router.get("/tasks")
+def list_tasks(job_id: str = None) -> list:
+    """List tasks for a job."""
+    conn = _get_conn()
+    if job_id:
+        rows = conn.execute("SELECT * FROM tasks WHERE job_id = ? ORDER BY created_at", (job_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT 100").fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/tasks/{task_id}")
+def get_task(task_id: str) -> dict:
+    """Get a single task by ID."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        return JSONResponse({"error": "Task not found"}, status_code=404)
+    return dict(row)
+
+
+@router.post("/jobs")
+def submit_job(body: dict) -> dict:
+    """Stub: job submit — not yet available in web mode."""
+    return {"error": "Job submit not yet available in web mode", "status": 501}
+
+
+@router.post("/subtitle/cues")
+def update_subtitle_cues(body: dict) -> dict:
+    """Stub: update subtitle cues."""
+    return {"ok": True}
+
+
+@router.put("/subtitle/cues/{cue_id}")
+def update_subtitle_cue(cue_id: str, body: dict) -> dict:
+    """Stub: update a single subtitle cue."""
+    return {"ok": True}
+
+
+@router.delete("/subtitle/cues/{cue_id}")
+def delete_subtitle_cue(cue_id: str) -> dict:
+    """Stub: delete a subtitle cue."""
+    return {"ok": True}
+
+
+@router.get("/dictionary/characters")
+def list_characters() -> list:
+    """Stub: list dictionary characters."""
+    return []
+
+
+@router.post("/dictionary/characters")
+def upsert_character(body: dict) -> dict:
+    """Stub: upsert a dictionary character."""
+    return {"ok": True}
+
+
+@router.delete("/dictionary/characters/{char_id}")
+def delete_character(char_id: str) -> dict:
+    """Stub: delete a dictionary character."""
+    return {"ok": True}
+
+
+@router.get("/dictionary/glossary")
+def list_glossary() -> list:
+    """Stub: list glossary entries."""
+    return []
+
+
+@router.post("/dictionary/glossary")
+def upsert_glossary(body: dict) -> dict:
+    """Stub: upsert a glossary entry."""
+    return {"ok": True}
+
+
+@router.delete("/dictionary/glossary/{entry_id}")
+def delete_glossary(entry_id: str) -> dict:
+    """Stub: delete a glossary entry."""
+    return {"ok": True}
+
+
+@router.post("/dictionary/glossary/{entry_id}/fingerprint")
+def glossary_fingerprint(entry_id: str) -> dict:
+    """Stub: compute glossary fingerprint."""
+    return {"fingerprint": ""}

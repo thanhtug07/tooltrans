@@ -112,6 +112,11 @@ def _ensure_table():
         )
     """)
     conn.commit()
+    # Migration: add is_default if missing (Rust schema doesn't have it)
+    existing_cols = {r[1] for r in conn.execute('PRAGMA table_info(providers)').fetchall()}
+    if 'is_default' not in existing_cols:
+        conn.execute('ALTER TABLE providers ADD COLUMN is_default INTEGER DEFAULT 0')
+        conn.commit()
     # Seed built-in providers if table is empty
     count = conn.execute("SELECT COUNT(*) FROM providers").fetchone()[0]
     if count == 0:

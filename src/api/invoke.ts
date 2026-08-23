@@ -32,8 +32,12 @@ const HTTP_ROUTES: Record<
   "job.list": { method: "GET", path: "/api/jobs", buildRequest: () => ({}) },
   "job.list_all": { method: "GET", path: "/api/jobs", buildRequest: () => ({}) },
   "job.get": { method: "GET", path: "/api/jobs", buildRequest: ({ jobId, id }) => ({ params: { _pathParam: String(jobId || id) } }) },
+  "job.submit": { method: "POST", path: "/api/jobs", buildRequest: (args) => ({ body: args }) },
   "job.cancel": { method: "POST", path: "/v1/jobs", buildRequest: ({ jobId, id }) => ({ params: { _pathParam: `${String(jobId || id)}/cancel` } }) },
   "job.retry": { method: "POST", path: "/v1/jobs", buildRequest: ({ jobId, id }) => ({ params: { _pathParam: `${String(jobId || id)}/retry` } }) },
+  // Tasks
+  "task.list": { method: "GET", path: "/api/tasks", buildRequest: ({ jobId }) => ({ params: jobId ? { job_id: String(jobId) } : undefined }) },
+  "task.get": { method: "GET", path: "/api/tasks", buildRequest: ({ taskId, id }) => ({ params: { _pathParam: String(taskId || id) } }) },
   // Media
   "media.probe": { method: "GET", path: "/api/media/probe", buildRequest: ({ path }) => ({ params: { path: String(path) } }) },
   // Worker / system
@@ -58,26 +62,54 @@ const HTTP_ROUTES: Record<
   "secrets.get_api_key_masked": { method: "GET", path: "/api/settings", buildRequest: () => ({ params: { _secret: "1" } }) },
   "secrets.set_api_key": { method: "POST", path: "/api/settings", buildRequest: ({ provider, key }) => ({ body: { key: `api.key.${provider}`, value: String(key) } }) },
   "secrets.delete_api_key": { method: "POST", path: "/api/settings", buildRequest: ({ provider }) => ({ body: { key: `api.key.${provider}`, value: "" } }) },
-  // Subtitle
-  "subtitle.get_cues": { method: "GET", path: "/api/subtitle/cues", buildRequest: ({ projectId }) => ({ params: { project_id: String(projectId) } }) },
+  // Pipeline
+  "pipeline.artifact_paths": { method: "GET", path: "/api/pipeline/artifact-paths", buildRequest: ({ projectId }) => ({ params: { project_id: String(projectId) } }) },
+  "pipeline.submit": { method: "POST", path: "/api/pipeline/submit", buildRequest: (args) => ({ body: args }) },
   // Export
-  "export.video": { method: "POST", path: "/v1/export/video", buildRequest: ({ sourceVideo, targetDir, name }) => ({ body: { source_video: String(sourceVideo), target_dir: String(targetDir), name: name ? String(name) : null } }) },
-  "export.subtitles": { method: "POST", path: "/v1/export/subtitles", buildRequest: ({ sourceSubtitle, targetDir, name, format }) => ({ body: { source_subtitle: String(sourceSubtitle), target_dir: String(targetDir), name: name ? String(name) : null, format: format ? String(format) : null } }) },
+  "export.video": { method: "POST", path: "/v1/export/video", buildRequest: (args) => ({ body: args }) },
+  "export.subtitles": { method: "POST", path: "/v1/export/subtitles", buildRequest: (args) => ({ body: args }) },
+  // Subtitle cues
+  "subtitle.get_cues": { method: "GET", path: "/api/subtitle/cues", buildRequest: ({ projectId }) => ({ params: { project_id: String(projectId) } }) },
+  "subtitle.replace_cues": { method: "POST", path: "/api/subtitle/cues", buildRequest: ({ projectId, cues }) => ({ body: { projectId, cues } }) },
+  "subtitle.update_cue": { method: "PUT", path: "/api/subtitle/cues", buildRequest: ({ cueId }) => ({ params: { _pathParam: String(cueId) } }) },
+  // Dictionary
+  "dictionary.character.list": { method: "GET", path: "/api/dictionary/characters", buildRequest: () => ({}) },
+  "dictionary.character.upsert": { method: "POST", path: "/api/dictionary/characters", buildRequest: (args) => ({ body: args }) },
+  "dictionary.character.delete": { method: "DELETE", path: "/api/dictionary/characters", buildRequest: ({ id }) => ({ params: { _pathParam: String(id) } }) },
+  "dictionary.glossary.list": { method: "GET", path: "/api/dictionary/glossary", buildRequest: () => ({}) },
+  "dictionary.glossary.upsert": { method: "POST", path: "/api/dictionary/glossary", buildRequest: (args) => ({ body: args }) },
+  "dictionary.glossary.delete": { method: "DELETE", path: "/api/dictionary/glossary", buildRequest: ({ id }) => ({ params: { _pathParam: String(id) } }) },
+  "dictionary.glossary.fingerprint": { method: "POST", path: "/api/dictionary/glossary", buildRequest: ({ id }) => ({ params: { _pathParam: `${String(id)}/fingerprint` } }) },
 };
 
-function toQueryString(params: Record<string, string>): string {
-  const entries = Object.entries(params).filter(([k, v]) => v !== undefined && v !== null && !k.startsWith("_"));
-  if (entries.length === 0) return "";
-  return "?" + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+function buildUrl(base: string, path: string, params?: Record<string, string>, pathParam?: string): string {
+  let url = pathParam ? `${base}${path}/${pathParam}` : `${base}${path}`;
+  if (params) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
+    if (qs) url += `?${qs}`;
+  }
+  return url;
 }
 
 async function httpInvoke<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
   const route = HTTP_ROUTES[cmd];
-  if (!route) throw new Error(`Command "${cmd}" is not available through the HTTP interface.`);
+  if (!route) {
+    throw new Error(`Command "${cmd}" is not available through the HTTP interface in web mode.`);
+  }
   const { params, body } = route.buildRequest(args);
-  let url = `${WORKER_BASE}${route.path}`;
-  if (params?._pathParam) url += `/${encodeURIComponent(params._pathParam)}`;
-  if (route.method === "GET" && params) url += toQueryString(params);
+  // Extract _pathParam for path segments
+  let pathParam: string | undefined;
+  const cleanParams: Record<string, string> = {};
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (k === "_pathParam") pathParam = v as string;
+      else cleanParams[k] = v as string;
+    }
+  }
+  const url = buildUrl(WORKER_BASE, route.path, cleanParams, pathParam);
   const fetchOpts: RequestInit = { method: route.method };
   const headers: Record<string, string> = { "Authorization": `Bearer ${AUTH_TOKEN}` };
   if (route.method !== "GET") headers["Content-Type"] = "application/json";
