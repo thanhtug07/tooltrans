@@ -217,3 +217,28 @@ def delete_provider(provider_id: str) -> dict:
 @router.post("/{provider_id}/test")
 def test_provider(provider_id: str) -> dict:
     return {"ok": True, "latency_ms": 0, "detail": "Test endpoint placeholder"}
+
+
+@router.post("/{provider_id}/enable")
+def set_provider_enabled(provider_id: str, body: dict) -> dict:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    if not row:
+        return JSONResponse({"error": "Provider not found"}, status_code=404)
+    enabled = body.get("enabled", True)
+    conn.execute("UPDATE providers SET enabled = ?, updated_at = ? WHERE id = ?", (1 if enabled else 0, _utcnow(), provider_id))
+    conn.commit()
+    updated = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    return dict(updated)
+
+
+@router.post("/{provider_id}/default")
+def set_provider_default(provider_id: str) -> dict:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    if not row:
+        return JSONResponse({"error": "Provider not found"}, status_code=404)
+    conn.execute("UPDATE providers SET is_default = 0")
+    conn.execute("UPDATE providers SET is_default = 1, updated_at = ? WHERE id = ?", (_utcnow(), provider_id))
+    conn.commit()
+    return {"ok": True}

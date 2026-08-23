@@ -375,6 +375,19 @@ def submit_job(body: dict) -> dict:
     return {"error": "Job submit not yet available in web mode", "status": 501}
 
 
+@router.get("/subtitle/cues")
+def get_subtitle_cues(project_id: str = "") -> list:
+    """Return subtitle cues for a project."""
+    if not project_id:
+        return []
+    conn = _get_conn()
+    try:
+        rows = conn.execute("SELECT * FROM subtitle_cues WHERE project_id = ? ORDER BY cue_number", (project_id,)).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
 @router.post("/subtitle/cues")
 def update_subtitle_cues(body: dict) -> dict:
     """Stub: update subtitle cues."""
