@@ -1082,6 +1082,27 @@ def model_catalog() -> JSONResponse:
     )
 
 
+_DEFAULT_MODELS_DIR = Path.home() / ".local" / "share" / "ai-video-localization" / "models"
+_VENDOR_MODELS_DIR = Path(__file__).resolve().parents[3] / "vendor" / "models"
+
+
+@router.get("/v1/models/list_local")
+def list_local_models() -> JSONResponse:
+    """List locally installed translation GGUF files."""
+    seen: dict[str, dict] = {}
+    for search_dir in (_DEFAULT_MODELS_DIR, _VENDOR_MODELS_DIR):
+        if not search_dir.is_dir():
+            continue
+        for gguf in search_dir.glob("*.gguf"):
+            if gguf.name not in seen:
+                seen[gguf.name] = {
+                    "file_name": gguf.name,
+                    "path": str(gguf),
+                    "size_bytes": gguf.stat().st_size,
+                }
+    return JSONResponse(list(seen.values()))
+
+
 #: Allowed mirror base URLs (China mirror + upstream). The mirror may only
 #: override the *host* of the canonical Hugging Face layout; the repo path and
 #: filename are always taken from the catalog so a mirror can never redirect a
@@ -1142,7 +1163,7 @@ def model_download(request: ModelDownloadRequest) -> JSONResponse:
                 "Unsupported download mirror.",
             )
 
-    dest_dir = Path(request.local_dir)
+    dest_dir = Path(request.local_dir) if request.local_dir.strip() else _DEFAULT_MODELS_DIR
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / request.filename
 

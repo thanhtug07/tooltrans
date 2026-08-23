@@ -137,7 +137,7 @@ export function LocalModelManager() {
     try {
       const [cat, local] = await Promise.all([modelCatalog(), listLocalModels()]);
       setCatalog(cat.models);
-      setInstalled(local);
+      setInstalled(Array.isArray(local) ? local : []);
     } catch (error) {
       toast.push(`Cannot load the model catalog: ${String(error)}`, "error");
     }

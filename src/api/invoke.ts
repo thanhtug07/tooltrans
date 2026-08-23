@@ -43,7 +43,7 @@ const HTTP_ROUTES: Record<
   "system.reveal": { method: "POST", path: "/api/settings", buildRequest: ({ path }) => ({ body: { key: "system.reveal", value: String(path) } }) },
   // Models
   "models.catalog": { method: "GET", path: "/v1/models/catalog", buildRequest: () => ({}) },
-  "models.list_local": { method: "GET", path: "/v1/models/catalog", buildRequest: () => ({}) },
+  "models.list_local": { method: "GET", path: "/v1/models/list_local", buildRequest: () => ({}) },
   "models.download": { method: "POST", path: "/v1/models/download", buildRequest: ({ repoId, filename, mirror, localDir }) => ({ body: { repo_id: String(repoId), filename: String(filename), local_dir: String(localDir || ""), mirror: mirror ? String(mirror) : null } }) },
   // Providers
   "providers.list": { method: "GET", path: "/api/providers", buildRequest: () => ({}) },
